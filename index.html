@@ -5,18 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Minhas Atividades</title>
 <style>
-  body{font-family:-apple-system,Arial,sans-serif;margin:0;padding:16px;background:#f4f5f7;max-width:800px;margin:auto}
+  body{font-family:-apple-system,Arial,sans-serif;margin:0;padding:16px;background:#f4f5f7;max-width:1000px;margin:auto}
   h1{font-size:22px}
   .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:0 1px 3px #0002}
   label{font-size:13px;color:#555;display:block;margin-top:8px}
   input,select,textarea{width:100%;padding:10px;font-size:16px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box}
   button{padding:10px 14px;font-size:15px;border:0;border-radius:8px;background:#2f6fed;color:#fff;margin:8px 6px 0 0}
   button.sec{background:#888} button.del{background:#d9534f}
+  button.ativo{background:#2f6fed} button.inativo{background:#c5c9d1;color:#333}
   .row{display:flex;gap:8px} .row>div{flex:1}
   .item h3{margin:0 0 6px;font-size:17px}
-  .tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;color:#fff}
+  .tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;color:#fff;white-space:nowrap}
   .a_fazer{background:#6c757d}.em_andamento{background:#2f6fed}.parada{background:#e0a800}.concluida{background:#28a745}
   small{color:#666}
+  .chk{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:14px}
+  .chk input{width:auto}
+  .tabwrap{overflow-x:auto;background:#fff;border-radius:12px;box-shadow:0 1px 3px #0002}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:650px}
+  th,td{border-bottom:1px solid #e3e5e8;padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#eef1f6;cursor:pointer;user-select:none;white-space:nowrap;position:sticky;top:0}
+  tr.linha:hover{background:#f6f9ff;cursor:pointer}
+  tr.grupo td{background:#dfe6f3;font-weight:bold}
+  td.obs{max-width:220px;white-space:pre-wrap;color:#555}
 </style>
 </head>
 <body>
@@ -41,6 +51,7 @@
   <label>Observação</label><textarea id="obs" rows="2"></textarea>
   <button onclick="salvar()">Salvar</button>
   <button class="sec" onclick="limpar()">Limpar</button>
+  <button class="del" id="btnExcluirForm" style="display:none" onclick="excluir($('editId').value)">Excluir</button>
 </div>
 
 <div class="card">
@@ -55,16 +66,30 @@
   </div>
   <label>Buscar</label><input id="busca" oninput="render()" placeholder="Digite para buscar...">
   <button class="sec" onclick="exportar()">Exportar</button>
-  <button class="sec" onclick="document.getElementById('arq').click()">Importar</button>
+  <button class="sec" onclick="$('arq').click()">Importar</button>
   <input type="file" id="arq" accept=".json" style="display:none" onchange="importar(event)">
 </div>
 
+<div>
+  <button id="btnCartoes" onclick="setVisao('cartoes')">Cartões</button>
+  <button id="btnTabela" onclick="setVisao('tabela')">Tabela</button>
+  <label class="chk" id="boxAgrupar"><input type="checkbox" id="agrupar" onchange="salvarPref();render()"> Agrupar por projeto</label>
+</div>
+<br>
 <div id="lista"></div>
 
 <script>
 const NOMES={a_fazer:"A fazer",em_andamento:"Em andamento",parada:"Parada",concluida:"Concluída"};
+const ORDEM_STATUS={em_andamento:1,a_fazer:2,parada:3,concluida:4};
 let dados=JSON.parse(localStorage.getItem("atividades")||"[]");
+let pref=JSON.parse(localStorage.getItem("prefs")||'{"visao":"cartoes","agrupar":false,"col":"","asc":true}');
 const $=id=>document.getElementById(id);
+$("agrupar").checked=pref.agrupar;
+
+function salvarPref(){pref.agrupar=$("agrupar").checked;localStorage.setItem("prefs",JSON.stringify(pref));}
+function setVisao(v){pref.visao=v;salvarPref();render();}
+function ordenarPor(col){if(pref.col===col)pref.asc=!pref.asc;else{pref.col=col;pref.asc=true;}salvarPref();render();}
+
 function gravar(){localStorage.setItem("atividades",JSON.stringify(dados));render();}
 function salvar(){
   const a={id:$("editId").value||Date.now().toString(),projeto:$("projeto").value.trim(),
@@ -75,23 +100,53 @@ function salvar(){
   if(i>=0)dados[i]=a;else dados.push(a);
   limpar();gravar();
 }
-function limpar(){["editId","projeto","atividade","inicio","conclusao","obs"].forEach(c=>$(c).value="");$("status").value="a_fazer";}
+function limpar(){["editId","projeto","atividade","inicio","conclusao","obs"].forEach(c=>$(c).value="");
+  $("status").value="a_fazer";$("btnExcluirForm").style.display="none";}
 function editar(id){const a=dados.find(x=>x.id===id);
   ["projeto","atividade","inicio","conclusao","status","obs"].forEach(c=>$(c).value=a[c]||"");
-  $("editId").value=a.id;window.scrollTo(0,0);}
-function excluir(id){if(confirm("Excluir esta atividade?")){dados=dados.filter(x=>x.id!==id);gravar();}}
+  $("editId").value=a.id;$("btnExcluirForm").style.display="inline-block";window.scrollTo(0,0);}
+function excluir(id){if(id&&confirm("Excluir esta atividade?")){dados=dados.filter(x=>x.id!==id);limpar();gravar();}}
 function fmt(d){return d?d.split("-").reverse().join("/"):"-";}
 function esc(t){return (t||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+function filtrados(){
+  const fp=$("fProjeto").value,fs=$("fStatus").value,b=$("busca").value.toLowerCase();
+  let l=dados.filter(a=>(!fp||a.projeto===fp)&&(!fs||a.status===fs)&&
+    (!b||[a.projeto,a.atividade,a.obs].join(" ").toLowerCase().includes(b)));
+  if(pref.col){
+    l.sort((x,y)=>{
+      let va=x[pref.col]||"",vb=y[pref.col]||"";
+      if(pref.col==="status"){va=ORDEM_STATUS[va];vb=ORDEM_STATUS[vb];}
+      else{va=va.toString().toLowerCase();vb=vb.toString().toLowerCase();
+        if(!va&&vb)return 1;if(va&&!vb)return -1;}
+      return (va>vb?1:va<vb?-1:0)*(pref.asc?1:-1);
+    });
+  }
+  return l;
+}
+
 function render(){
   const projetos=[...new Set(dados.map(a=>a.projeto).filter(Boolean))].sort();
   const sel=$("fProjeto").value;
   $("fProjeto").innerHTML='<option value="">Todos</option>'+projetos.map(p=>`<option>${esc(p)}</option>`).join("");
   $("fProjeto").value=projetos.includes(sel)?sel:"";
   $("listaProjetos").innerHTML=projetos.map(p=>`<option value="${esc(p)}">`).join("");
-  const fp=$("fProjeto").value,fs=$("fStatus").value,b=$("busca").value.toLowerCase();
-  const lista=dados.filter(a=>(!fp||a.projeto===fp)&&(!fs||a.status===fs)&&
-    (!b||[a.projeto,a.atividade,a.obs].join(" ").toLowerCase().includes(b)));
-  $("lista").innerHTML=lista.length?lista.map(a=>`
+  $("btnCartoes").className=pref.visao==="cartoes"?"ativo":"inativo";
+  $("btnTabela").className=pref.visao==="tabela"?"ativo":"inativo";
+  const lista=filtrados();
+  if(!lista.length){$("lista").innerHTML="<p>Nenhuma atividade encontrada.</p>";return;}
+  pref.visao==="tabela"?renderTabela(lista):renderCartoes(lista);
+}
+
+function grupos(lista){
+  if(!$("agrupar").checked)return [[null,lista]];
+  const m={};lista.forEach(a=>{const k=a.projeto||"(sem projeto)";(m[k]=m[k]||[]).push(a);});
+  return Object.keys(m).sort().map(k=>[k,m[k]]);
+}
+
+function renderCartoes(lista){
+  $("lista").innerHTML=grupos(lista).map(([g,itens])=>
+    (g?`<h3>${esc(g)} (${itens.length})</h3>`:"")+itens.map(a=>`
     <div class="card item">
       <h3>${esc(a.atividade)||"(sem título)"}</h3>
       <span class="tag ${a.status}">${NOMES[a.status]}</span>
@@ -100,8 +155,24 @@ function render(){
       ${a.obs?`<p>${esc(a.obs)}</p>`:""}
       <button onclick="editar('${a.id}')">Editar</button>
       <button class="del" onclick="excluir('${a.id}')">Excluir</button>
-    </div>`).join(""):"<p>Nenhuma atividade encontrada.</p>";
+    </div>`).join("")).join("");
 }
+
+function renderTabela(lista){
+  const cols=[["projeto","Projeto"],["atividade","Atividade"],["inicio","Início"],["conclusao","Conclusão"],["status","Status"],["obs","Observação"]];
+  const seta=c=>pref.col===c?(pref.asc?" ▲":" ▼"):"";
+  let h=`<div class="tabwrap"><table><thead><tr>${cols.map(([c,n])=>`<th onclick="ordenarPor('${c}')">${n}${seta(c)}</th>`).join("")}</tr></thead><tbody>`;
+  grupos(lista).forEach(([g,itens])=>{
+    if(g)h+=`<tr class="grupo"><td colspan="6">${esc(g)} (${itens.length})</td></tr>`;
+    itens.forEach(a=>{h+=`<tr class="linha" onclick="editar('${a.id}')">
+      <td>${esc(a.projeto)||"-"}</td><td>${esc(a.atividade)||"-"}</td>
+      <td>${fmt(a.inicio)}</td><td>${fmt(a.conclusao)}</td>
+      <td><span class="tag ${a.status}">${NOMES[a.status]}</span></td>
+      <td class="obs">${esc(a.obs)}</td></tr>`;});
+  });
+  $("lista").innerHTML=h+"</tbody></table></div>";
+}
+
 function exportar(){
   const blob=new Blob([JSON.stringify(dados,null,2)],{type:"application/json"});
   const l=document.createElement("a");l.href=URL.createObjectURL(blob);
