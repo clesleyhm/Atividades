@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minhas Atividades</title>
+<style>
+  body{font-family:-apple-system,Arial,sans-serif;margin:0;padding:16px;background:#f4f5f7;max-width:800px;margin:auto}
+  h1{font-size:22px}
+  .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:0 1px 3px #0002}
+  label{font-size:13px;color:#555;display:block;margin-top:8px}
+  input,select,textarea{width:100%;padding:10px;font-size:16px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box}
+  button{padding:10px 14px;font-size:15px;border:0;border-radius:8px;background:#2f6fed;color:#fff;margin:8px 6px 0 0}
+  button.sec{background:#888} button.del{background:#d9534f}
+  .row{display:flex;gap:8px} .row>div{flex:1}
+  .item h3{margin:0 0 6px;font-size:17px}
+  .tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;color:#fff}
+  .a_fazer{background:#6c757d}.em_andamento{background:#2f6fed}.parada{background:#e0a800}.concluida{background:#28a745}
+  small{color:#666}
+</style>
+</head>
+<body>
+<h1>Minhas Atividades</h1>
+
+<div class="card">
+  <input type="hidden" id="editId">
+  <label>Projeto</label><input id="projeto" list="listaProjetos">
+  <datalist id="listaProjetos"></datalist>
+  <label>Atividade</label><input id="atividade">
+  <div class="row">
+    <div><label>Data de início</label><input type="date" id="inicio"></div>
+    <div><label>Data de conclusão</label><input type="date" id="conclusao"></div>
+  </div>
+  <label>Status</label>
+  <select id="status">
+    <option value="a_fazer">A fazer</option>
+    <option value="em_andamento">Em andamento</option>
+    <option value="parada">Parada</option>
+    <option value="concluida">Concluída</option>
+  </select>
+  <label>Observação</label><textarea id="obs" rows="2"></textarea>
+  <button onclick="salvar()">Salvar</button>
+  <button class="sec" onclick="limpar()">Limpar</button>
+</div>
+
+<div class="card">
+  <div class="row">
+    <div><label>Filtrar projeto</label><select id="fProjeto" onchange="render()"></select></div>
+    <div><label>Filtrar status</label>
+      <select id="fStatus" onchange="render()">
+        <option value="">Todos</option><option value="a_fazer">A fazer</option>
+        <option value="em_andamento">Em andamento</option><option value="parada">Parada</option>
+        <option value="concluida">Concluída</option>
+      </select></div>
+  </div>
+  <label>Buscar</label><input id="busca" oninput="render()" placeholder="Digite para buscar...">
+  <button class="sec" onclick="exportar()">Exportar</button>
+  <button class="sec" onclick="document.getElementById('arq').click()">Importar</button>
+  <input type="file" id="arq" accept=".json" style="display:none" onchange="importar(event)">
+</div>
+
+<div id="lista"></div>
+
+<script>
+const NOMES={a_fazer:"A fazer",em_andamento:"Em andamento",parada:"Parada",concluida:"Concluída"};
+let dados=JSON.parse(localStorage.getItem("atividades")||"[]");
+const $=id=>document.getElementById(id);
+function gravar(){localStorage.setItem("atividades",JSON.stringify(dados));render();}
+function salvar(){
+  const a={id:$("editId").value||Date.now().toString(),projeto:$("projeto").value.trim(),
+    atividade:$("atividade").value.trim(),inicio:$("inicio").value,conclusao:$("conclusao").value,
+    status:$("status").value,obs:$("obs").value.trim()};
+  if(!a.projeto&&!a.atividade&&!a.obs){alert("Preencha pelo menos um campo.");return;}
+  const i=dados.findIndex(x=>x.id===a.id);
+  if(i>=0)dados[i]=a;else dados.push(a);
+  limpar();gravar();
+}
+function limpar(){["editId","projeto","atividade","inicio","conclusao","obs"].forEach(c=>$(c).value="");$("status").value="a_fazer";}
+function editar(id){const a=dados.find(x=>x.id===id);
+  ["projeto","atividade","inicio","conclusao","status","obs"].forEach(c=>$(c).value=a[c]||"");
+  $("editId").value=a.id;window.scrollTo(0,0);}
+function excluir(id){if(confirm("Excluir esta atividade?")){dados=dados.filter(x=>x.id!==id);gravar();}}
+function fmt(d){return d?d.split("-").reverse().join("/"):"-";}
+function esc(t){return (t||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function render(){
+  const projetos=[...new Set(dados.map(a=>a.projeto).filter(Boolean))].sort();
+  const sel=$("fProjeto").value;
+  $("fProjeto").innerHTML='<option value="">Todos</option>'+projetos.map(p=>`<option>${esc(p)}</option>`).join("");
+  $("fProjeto").value=projetos.includes(sel)?sel:"";
+  $("listaProjetos").innerHTML=projetos.map(p=>`<option value="${esc(p)}">`).join("");
+  const fp=$("fProjeto").value,fs=$("fStatus").value,b=$("busca").value.toLowerCase();
+  const lista=dados.filter(a=>(!fp||a.projeto===fp)&&(!fs||a.status===fs)&&
+    (!b||[a.projeto,a.atividade,a.obs].join(" ").toLowerCase().includes(b)));
+  $("lista").innerHTML=lista.length?lista.map(a=>`
+    <div class="card item">
+      <h3>${esc(a.atividade)||"(sem título)"}</h3>
+      <span class="tag ${a.status}">${NOMES[a.status]}</span>
+      <small> Projeto: ${esc(a.projeto)||"-"}</small><br>
+      <small>Início: ${fmt(a.inicio)} | Conclusão: ${fmt(a.conclusao)}</small>
+      ${a.obs?`<p>${esc(a.obs)}</p>`:""}
+      <button onclick="editar('${a.id}')">Editar</button>
+      <button class="del" onclick="excluir('${a.id}')">Excluir</button>
+    </div>`).join(""):"<p>Nenhuma atividade encontrada.</p>";
+}
+function exportar(){
+  const blob=new Blob([JSON.stringify(dados,null,2)],{type:"application/json"});
+  const l=document.createElement("a");l.href=URL.createObjectURL(blob);
+  l.download="atividades.json";l.click();
+}
+function importar(e){
+  const r=new FileReader();
+  r.onload=()=>{try{const novos=JSON.parse(r.result);
+    novos.forEach(n=>{const i=dados.findIndex(x=>x.id===n.id);if(i>=0)dados[i]=n;else dados.push(n);});
+    gravar();alert("Importado!");}catch{alert("Arquivo inválido.");}};
+  r.readAsText(e.target.files[0]);e.target.value="";
+}
+render();
+</script>
+</body>
+</html>
